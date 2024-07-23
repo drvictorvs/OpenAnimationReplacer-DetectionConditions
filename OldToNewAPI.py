@@ -107,6 +107,6 @@ def translate_directory(directory):
         translate_file(os.path.join(root, file))
 
 # Replace 'your_directory_path' with the path to your directory
-translate_directory('C:\\Users\\victor.vasconcelos\\Downloads\\Underdog\\meshes\\')
+translate_directory(your_directory_path)
 
 # translate_file(os.getcwd() + '\\actors\\character\\animations\\DynamicAnimationReplacer\\_CustomConditions\\2000000191\\user.json')
