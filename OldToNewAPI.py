@@ -1,40 +1,69 @@
 import os
 import json
 
+# Constants
+your_directory_path = ''
+keys_to_remove = [
+    "Use the humanoid condition", "Is humanoid", "Use the gender condition",
+    "Is Female", "Use the relationship condition", "Comparison",
+    "Relationship [-4 = Archnemesis, .., 4 = Lover]",
+    "Use the faction condition", "Is NOT", "Faction",
+    "Use the actorbase condition", "Is NOT_2", "Actor base",
+    "Use the distance condition", "Comparison_2", "Distance (centimeters)",
+    "Use the keyword condition", "Is NOT_3", "Keyword",
+    "Use the compare value condition", "Value A", "Comparison_3", "Value B",
+    "negated"
+]
+
+
+def create_condition(condition_type, old_conditions, keys):
+  return {
+      "condition": condition_type,
+      "requiredPlugin": "OpenAnimationReplacer-DetectionPlugin",
+      "requiredVersion": old_conditions.get("requiredVersion", ""),
+      **{
+          key: old_conditions.get(key, False)
+          for key in keys
+      }
+  }
+
+
 def translate_conditions(old_conditions):
+  condition_mappings = {
+      "Use the humanoid condition": ("DetectionHumanoid", ["Is humanoid"]),
+      "Use the relationship condition":
+      ("DetectionRelationship",
+       ["Comparison", "Relationship [-4 = Archnemesis, .., 4 = Lover]"]),
+      "Use the faction condition": ("DetectionFaction", ["Is NOT", "Faction"]),
+      "Use the distance condition":
+      ("DetectionDistance", ["Comparison_2", "Distance (centimeters)"])
+  }
   new_conditions = []
-  if old_conditions.get("Use the humanoid condition", False):
-    new_conditions.append({
-        "condition": "DetectionHumanoid",
-        "requiredPlugin": "OpenAnimationReplacer-DetectionPlugin",
-        "requiredVersion": old_conditions.get("requiredVersion", ""),
-        "Is humanoid": old_conditions.get("Is humanoid", False)
-    })
-  if old_conditions.get("Use the relationship condition", False):
-    new_conditions.append({
-        "condition": "DetectionRelationship",
-        "requiredPlugin": "OpenAnimationReplacer-DetectionPlugin",
-        "requiredVersion": old_conditions.get("requiredVersion", ""),
-        "Comparison": old_conditions.get("Comparison", "=="),
-        "Relationship [-4 = Archnemesis, .., 4 = Lover]": old_conditions.get("Relationship [-4 = Archnemesis, .., 4 = Lover]", {})
-    })
-  if old_conditions.get("Use the faction condition", False):
-    new_conditions.append({
-        "condition": "DetectionFaction",
-        "requiredPlugin": "OpenAnimationReplacer-DetectionPlugin",
-        "requiredVersion": old_conditions.get("requiredVersion", ""),
-        "Is NOT": old_conditions.get("Is NOT", False),
-        "Faction": old_conditions.get("Faction", {})
-    })
-  if old_conditions.get("Use the distance condition", False):
-    new_conditions.append({
-        "condition": "DetectionDistance",
-        "requiredPlugin": "OpenAnimationReplacer-DetectionPlugin",
-        "requiredVersion": old_conditions.get("requiredVersion", ""),
-        "Comparison": old_conditions.get("Comparison_2", "<="),
-        "Distance (centimeters)": old_conditions.get("Distance (centimeters)", {})
-    })
+  for key, (condition_type, keys) in condition_mappings.items():
+    if old_conditions.get(key, False):
+      new_conditions.append(
+          create_condition(condition_type, old_conditions, keys))
   return new_conditions
+
+
+def process_condition(condition):
+  if condition.get("condition").lower() in [
+      "detects", "isdetectedby", "detected_by"
+  ]:
+    new_condition = {
+        "condition": "DETECTED_BY" if condition.get("condition") == "IsDetectedBy" else condition.get("condition").upper(),
+        "requiredPlugin": condition.get("requiredPlugin", ""),
+        "requiredVersion": condition.get("requiredVersion", ""),
+        "negated": condition.get("negated", False),
+        "Conditions": translate_conditions(condition)
+    }
+    for key in keys_to_remove:
+      condition.pop(key, None)
+    condition.update(new_condition)
+  elif condition.get("condition").lower() in ["and", "or"]:
+    for sub_condition in condition.get("Conditions", []):
+      process_condition(sub_condition)
+
 
 def translate_file(file_path):
   with open(file_path, 'r') as file:
@@ -43,54 +72,7 @@ def translate_file(file_path):
   print('Opening ' + file_path + '...')
 
   for condition in data.get("conditions", []):
-    if condition.get("condition").lower() in ["detects", "isdetectedby", "detected_by"]:
-      new_condition = {
-          "condition": "DETECTED_BY" if condition.get("condition") == "IsDetectedBy" else condition.get("condition").upper(),
-          "requiredPlugin": condition.get("requiredPlugin", ""),
-          "requiredVersion": condition.get("requiredVersion", ""),
-          "negated": condition.get("negated", False),
-          "Conditions": translate_conditions(condition)
-      }
-      keys_to_remove = [
-          "Use the humanoid condition", "Is humanoid",
-          "Use the gender condition", "Is Female",
-          "Use the relationship condition", "Comparison",
-          "Relationship [-4 = Archnemesis, .., 4 = Lover]",
-          "Use the faction condition", "Is NOT", "Faction",
-          "Use the actorbase condition", "Is NOT_2", "Actor base",
-          "Use the distance condition", "Comparison_2",
-          "Distance (centimeters)", "Use the keyword condition", "Is NOT_3",
-          "Keyword", "Use the compare value condition", "Value A",
-          "Comparison_3", "Value B", "negated"
-      ]
-      for key in keys_to_remove:
-        condition.pop(key, None)
-      condition.update(new_condition)
-    elif condition.get("condition").lower() in ["and", "or"]:
-      for condition2 in condition.get("Conditions", []):
-        if condition2.get("condition").lower() in ["detects", "isdetectedby", "detected_by"]:
-          new_condition2 = {
-              "condition": "DETECTED_BY" if condition2.get("condition") == "IsDetectedBy" else condition2.get("condition").upper(),
-              "requiredPlugin": condition2.get("requiredPlugin", ""),
-              "requiredVersion": condition2.get("requiredVersion", ""),
-              "negated": condition2.get("negated", False),
-              "Conditions": translate_conditions(condition2)
-          }
-          keys_to_remove = [
-              "Use the humanoid condition", "Is humanoid",
-              "Use the gender condition", "Is Female",
-              "Use the relationship condition", "Comparison",
-              "Relationship [-4 = Archnemesis, .., 4 = Lover]",
-              "Use the faction condition", "Is NOT", "Faction",
-              "Use the actorbase condition", "Is NOT_2", "Actor base",
-              "Use the distance condition", "Comparison_2",
-              "Distance (centimeters)", "Use the keyword condition", "Is NOT_3",
-              "Keyword", "Use the compare value condition", "Value A",
-              "Comparison_3", "Value B", "negated"
-          ]
-          for key in keys_to_remove:
-            condition2.pop(key, None)
-          condition2.update(new_condition2)
+    process_condition(condition)
 
   print('Saving ' + file_path + '...')
 
@@ -106,7 +88,6 @@ def translate_directory(directory):
       if file.endswith(".json"):
         translate_file(os.path.join(root, file))
 
-# Replace 'your_directory_path' with the path to your directory
-translate_directory(your_directory_path)
 
-# translate_file(os.getcwd() + '\\actors\\character\\animations\\DynamicAnimationReplacer\\_CustomConditions\\2000000191\\user.json')
+# Replace '' with the path to your directory
+translate_directory(your_directory_path)
